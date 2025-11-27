@@ -1,0 +1,20 @@
+
+# Python
+__pycache__/
+*.pyc
+
+# Ultralytics
+/runs/
+*.pt
+*.torchscript
+*.cache
+
+# Dataset
+dataset/train/
+dataset/valid/
+training_zip_tiny.zip
+yolov8n.pt
+
+# Output
+output/
+dataset/data.yaml
