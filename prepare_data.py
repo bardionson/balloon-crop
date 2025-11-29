@@ -1,82 +1,82 @@
-
-import json
 import os
-import cv2
-import shutil
-from sklearn.model_selection import train_test_split
+import json
+import random
+import yaml
 
-def convert_to_yolo(image_width, image_height, xmin, ymin, width, height):
-    x_center = (xmin + width / 2) / image_width
-    y_center = (ymin + height / 2) / image_height
-    w_norm = width / image_width
-    h_norm = height / image_height
-    return x_center, y_center, w_norm, h_norm
+# --- Configuration ---
+IMAGE_DIR = 'data/images'
+ANNOTATION_DIR = 'data/annotations'
+YOLO_DATA_DIR = 'data/yolo_data'
+TRAIN_RATIO = 0.8
+
+def convert_to_yolo_format(image_width, image_height, rect_mask):
+    """Converts a single bounding box to the YOLOv8 format."""
+    x_center = (rect_mask['xMin'] + rect_mask['width'] / 2) / image_width
+    y_center = (rect_mask['yMin'] + rect_mask['height'] / 2) / image_height
+    width = rect_mask['width'] / image_width
+    height = rect_mask['height'] / image_height
+    return f"0 {x_center} {y_center} {width} {height}"
 
 def main():
     # Create directories
-    os.makedirs('dataset/train/images', exist_ok=True)
-    os.makedirs('dataset/train/labels', exist_ok=True)
-    os.makedirs('dataset/valid/images', exist_ok=True)
-    os.makedirs('dataset/valid/labels', exist_ok=True)
+    yolo_images_train_dir = os.path.join(YOLO_DATA_DIR, 'images', 'train')
+    yolo_labels_train_dir = os.path.join(YOLO_DATA_DIR, 'labels', 'train')
+    yolo_images_val_dir = os.path.join(YOLO_DATA_DIR, 'images', 'val')
+    yolo_labels_val_dir = os.path.join(YOLO_DATA_DIR, 'labels', 'val')
 
-    # Get all image files
-    image_files = [f for f in os.listdir('dataset') if f.endswith('.JPG')]
+    os.makedirs(yolo_images_train_dir, exist_ok=True)
+    os.makedirs(yolo_labels_train_dir, exist_ok=True)
+    os.makedirs(yolo_images_val_dir, exist_ok=True)
+    os.makedirs(yolo_labels_val_dir, exist_ok=True)
 
-    # Split the data into training and validation sets
-    train_files, valid_files = train_test_split(image_files, test_size=0.2, random_state=42)
+    # Get list of images
+    image_files = [f for f in os.listdir(IMAGE_DIR) if f.endswith(('.jpg', '.png'))]
+    random.shuffle(image_files)
 
-    for image_file in image_files:
-        # Determine destination
-        if image_file in train_files:
-            img_dest_folder = 'dataset/train/images'
-            lbl_dest_folder = 'dataset/train/labels'
-        else:
-            img_dest_folder = 'dataset/valid/images'
-            lbl_dest_folder = 'dataset/valid/labels'
+    # Split into training and validation sets
+    split_index = int(len(image_files) * TRAIN_RATIO)
+    train_files = image_files[:split_index]
+    val_files = image_files[split_index:]
 
-        # Get image dimensions
-        image_path = os.path.join('dataset', image_file)
-        image = cv2.imread(image_path)
-        image_height, image_width, _ = image.shape
+    # Process files
+    for file_list, img_dest, lbl_dest in [
+        (train_files, yolo_images_train_dir, yolo_labels_train_dir),
+        (val_files, yolo_images_val_dir, yolo_labels_val_dir)
+    ]:
+        for image_file in file_list:
+            base_name = os.path.splitext(image_file)[0]
+            json_file = base_name + '.json'
 
-        # Read JSON file
-        json_file = image_file.replace('.JPG', '.json')
-        json_path = os.path.join('dataset', json_file)
-        with open(json_path, 'r') as f:
-            annotations = json.load(f)
+            # Copy image
+            os.link(os.path.join(IMAGE_DIR, image_file), os.path.join(img_dest, image_file))
 
-        # Create YOLO label file
-        yolo_labels = []
-        for ann in annotations:
-            rect_mask = ann['rectMask']
-            xmin = rect_mask['xMin']
-            ymin = rect_mask['yMin']
-            width = rect_mask['width']
-            height = rect_mask['height']
+            # Convert annotation
+            with open(os.path.join(ANNOTATION_DIR, json_file), 'r') as f:
+                annotations = json.load(f)
 
-            x_center, y_center, w_norm, h_norm = convert_to_yolo(image_width, image_height, xmin, ymin, width, height)
-            yolo_labels.append(f"0 {x_center} {y_center} {w_norm} {h_norm}")
+            # For YOLO, we need image dimensions
+            from PIL import Image
+            with Image.open(os.path.join(IMAGE_DIR, image_file)) as img:
+                img_width, img_height = img.size
 
-        # Write YOLO label file
-        label_file = image_file.replace('.JPG', '.txt')
-        label_path = os.path.join(lbl_dest_folder, label_file)
-        with open(label_path, 'w') as f:
-            f.write('\n'.join(yolo_labels))
+            yolo_annotations = []
+            for ann in annotations:
+                yolo_annotations.append(convert_to_yolo_format(img_width, img_height, ann['rectMask']))
 
-        # Copy image file
-        shutil.copy(image_path, os.path.join(img_dest_folder, image_file))
+            with open(os.path.join(lbl_dest, base_name + '.txt'), 'w') as f:
+                f.write('\n'.join(yolo_annotations))
 
-    # Create data.yaml
-    data_yaml = f"""
-    path: {os.path.abspath('dataset')}
-    train: train/images
-    val: valid/images
+    # Create data.yaml file
+    data_yaml = {
+        'train': os.path.abspath(os.path.join(YOLO_DATA_DIR, 'images', 'train')),
+        'val': os.path.abspath(os.path.join(YOLO_DATA_DIR, 'images', 'val')),
+        'nc': 1,
+        'names': ['balloon']
+    }
+    with open(os.path.join(YOLO_DATA_DIR, 'data.yaml'), 'w') as f:
+        yaml.dump(data_yaml, f)
 
-    nc: 1
-    names: ['balloon']
-    """
-    with open('dataset/data.yaml', 'w') as f:
-        f.write(data_yaml)
+    print("Data preparation complete.")
 
 if __name__ == '__main__':
     main()
