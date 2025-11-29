@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balloon Bounding Box Visualizer</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 800px;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            font-family: monospace;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        /* This ensures the canvas fits on your screen even if the image is 6000px wide */
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎈 Balloon Bounding Box Tool</h1>
+
+    <div class="controls">
+        <div>
+            <h3>Step 1: Upload Image</h3>
+            <input type="file" id="imageLoader" accept="image/*">
+        </div>
+
+        <div>
+            <h3>Step 2: Paste JSON Here</h3>
+            <textarea id="jsonInput" placeholder="Paste the JSON array here..."></textarea>
+        </div>
+
+        <button onclick="processImage()">Draw Bounding Boxes</button>
+    </div>
+
+    <canvas id="myCanvas"></canvas>
+
+    <script>
+        let uploadedImage = null;
+
+        // 1. Listen for the image upload
+        const imageLoader = document.getElementById('imageLoader');
+        imageLoader.addEventListener('change', handleImage, false);
+
+        function handleImage(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                uploadedImage = new Image();
+                uploadedImage.onload = function() {
+                    // Just show the raw image first
+                    drawToCanvas(uploadedImage);
+                }
+                uploadedImage.src = event.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        }
+
+        // 2. Setup the Canvas
+        function drawToCanvas(img) {
+            const canvas = document.getElementById('myCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas internal resolution to match the actual image resolution
+            // This ensures coordinates like 5580 are accurate
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            // Draw the image onto the canvas
+            ctx.drawImage(img, 0, 0);
+        }
+
+        // 3. Process the JSON and Draw Boxes
+        function processImage() {
+            if (!uploadedImage) {
+                alert("Please upload an image first!");
+                return;
+            }
+
+            // Reset canvas with fresh image (clears old boxes)
+            drawToCanvas(uploadedImage);
+
+            const canvas = document.getElementById('myCanvas');
+            const ctx = canvas.getContext('2d');
+            const jsonInput = document.getElementById('jsonInput').value;
+
+            try {
+                const data = JSON.parse(jsonInput);
+
+                // Determine line width based on image size. 
+                // For a 6000px wide image, we want a thicker line (e.g., 15px) so it's visible.
+                const lineWidth = Math.max(3, canvas.width / 300);
+
+                data.forEach(box => {
+                    // Extract data from your specific JSON format
+                    const rect = box.rectMask;
+                    const labels = box.labels;
+
+                    const x = rect.xMin;
+                    const y = rect.yMin;
+                    const w = rect.width;
+                    const h = rect.height;
+
+                    // Draw the Rectangle
+                    ctx.beginPath();
+                    ctx.lineWidth = lineWidth;
+                    ctx.strokeStyle = labels.labelColor || 'red'; // Use JSON color or default to red
+                    ctx.rect(x, y, w, h);
+                    ctx.stroke();
+
+                    // Optional: Add a label background for readability
+                    ctx.fillStyle = labels.labelColor || 'red';
+                    const fontSize = lineWidth * 4;
+                    ctx.font = `bold ${fontSize}px Arial`;
+                    ctx.fillText("Balloon", x, y - (lineWidth + 5));
+                });
+
+            } catch (error) {
+                alert("Error parsing JSON. Please check the format.\n\n" + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
