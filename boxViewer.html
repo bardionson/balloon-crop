@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balloon Bounding Box Visualizer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .controls {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .step-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+        .step-group:last-child {
+            border-bottom: none;
+        }
+        label {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #0056b3;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            font-family: monospace;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 10px;
+            background-color: #fafafa;
+        }
+        
+        /* Big Green Button Style */
+        .draw-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            width: 100%;
+            transition: background 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .draw-btn:hover {
+            background-color: #218838;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #333;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            display: block;
+            margin: 0 auto;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎈 Auto-Draw Balloon Viewer</h1>
+
+    <div class="controls">
+        <div class="step-group">
+            <label>1. Upload Image</label>
+            <input type="file" id="imageLoader" accept="image/*">
+        </div>
+
+        <div class="step-group">
+            <label>2. Upload JSON File (Auto-Draws on upload)</label>
+            <input type="file" id="jsonFileLoader" accept=".json">
+            
+            <p style="margin: 5px 0; font-size: 0.9em; color: #666;">Or paste text below:</p>
+            <textarea id="jsonInput" placeholder='[ { "content": ... } ]'></textarea>
+        </div>
+
+        <button class="draw-btn" onclick="processImage()">Force Redraw</button>
+    </div>
+
+    <canvas id="myCanvas"></canvas>
+</div>
+
+<script>
+    let uploadedImage = null;
+
+    // --- 1. Handle Image Upload ---
+    document.getElementById('imageLoader').addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            uploadedImage = new Image();
+            uploadedImage.onload = function() {
+                // If JSON is already there, draw immediately!
+                processImage(); 
+            }
+            uploadedImage.src = event.target.result;
+        }
+        reader.readAsDataURL(e.target.files[0]);
+    });
+
+    // --- 2. Handle JSON File Upload (AUTO DRAW) ---
+    document.getElementById('jsonFileLoader').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            // Fill the text box
+            document.getElementById('jsonInput').value = event.target.result;
+            // TRIGGER DRAW AUTOMATICALLY
+            processImage();
+        };
+        reader.readAsText(file);
+    });
+
+    // --- 3. Draw Function ---
+    function drawToCanvas(img) {
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+    }
+
+    function processImage() {
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!uploadedImage) {
+            // If we just loaded JSON but no image yet, we can't draw. 
+            // We just wait for the image loader to call this function.
+            return; 
+        }
+
+        // Clear and redraw image
+        drawToCanvas(uploadedImage);
+
+        const jsonText = document.getElementById('jsonInput').value;
+        if (!jsonText.trim()) return;
+
+        try {
+            const data = JSON.parse(jsonText);
+            
+            // Dynamic Line Width (thicker for huge images)
+            const lineWidth = Math.max(5, canvas.width / 250);
+
+            data.forEach(box => {
+                if (box.rectMask) {
+                    const rect = box.rectMask;
+                    
+                    // Draw Box
+                    ctx.beginPath();
+                    ctx.lineWidth = lineWidth;
+                    ctx.strokeStyle = '#ff0000'; // Always Red
+                    ctx.rect(rect.xMin, rect.yMin, rect.width, rect.height);
+                    ctx.stroke();
+
+                    // Optional: Draw text label
+                    ctx.fillStyle = '#ff0000';
+                    ctx.font = `bold ${lineWidth * 3}px Arial`;
+                    ctx.fillText("Balloon", rect.xMin, rect.yMin - (lineWidth + 5));
+                }
+            });
+
+        } catch (error) {
+            alert("JSON Error: " + error.message);
+        }
+    }
+</script>
+
+</body>
+</html>
