@@ -1,6 +1,6 @@
 # Hot Air Balloon Detection and Cropping
 
-This project provides a set of scripts to train a YOLOv8 model to detect hot air balloons in images and then crop them out into square tiles.
+This project provides a complete pipeline to train a custom YOLOv8 model to detect hot air balloons in images and then crop them out into padded, square tiles.
 
 ## Setup
 
@@ -9,9 +9,9 @@ This project provides a set of scripts to train a YOLOv8 model to detect hot air
     pip install -r requirements.txt
     ```
 
-## Training Your Own Model
+## Step 1: Training Your Own Model
 
-If you have your own dataset of images and annotations, you can train a custom model for the best results.
+For the best results, you should train a model on your own dataset of images and annotations.
 
 ### 1. Organize Your Data
 
@@ -36,58 +36,56 @@ Example `photo1.json`:
 
 ### 2. Prepare Data for YOLOv8
 
-Once your data is organized correctly, run the data preparation script. This script will convert your JSON annotations into the YOLOv8 format required for training and split your data into training and validation sets.
+Once your data is organized correctly, run the data preparation script. This script converts your JSON annotations into the YOLOv8 format required for training and splits your data into training and validation sets.
 
 Open your terminal and run the following command:
-
 ```bash
 python prepare_data.py
 ```
-
-This will create a `yolo_data` directory containing the processed data and a `data.yaml` configuration file.
+This will create a `data/yolo_data` directory containing the processed data and a `data.yaml` configuration file.
 
 ### 3. Run the Training
 
 Now you are ready to train the model. Run the training script:
-
 ```bash
 python train.py
 ```
-
 This process may take a significant amount of time, depending on the size of your dataset and the power of your computer.
 
-Once training is complete, the best-performing model will be saved to a file, typically located at `runs/detect/train/weights/best.pt`.
+Once training is complete, the best-performing model will be saved to a file, typically located at `runs/detect/train/weights/best.pt`. Note this path for the next step.
 
-## Using Your Trained Model for Cropping
+## Step 2: Evaluating Your Model (Optional)
 
-After training, you can use your custom model to detect and crop balloons from new images.
-
-### 1. Update the Model Path
-
-Open the `crop_balloons.py` script and find the `MODEL_PATH` variable. Update it to point to your newly trained model file.
-
-For example:
-```python
-# In crop_balloons.py
-MODEL_PATH = 'runs/detect/train/weights/best.pt'
-```
-
-### 2. Run the Cropping Script
-
-You can now run the cropping script on any image:
-
-```bash
-python crop_balloons.py <path_to_your_image>
-```
-
-The cropped balloon images will be saved in the `output_crops/` directory.
-
-## Other Scripts
-
-### `evaluate.py`
-
-Use this script to evaluate the performance of your trained model on the validation set.
-
+You can evaluate your new model's performance on the validation dataset by running:
 ```bash
 python evaluate.py
 ```
+This will print performance metrics like mAP (mean Average Precision) and save detailed results in a `runs/detect/val` directory.
+
+## Step 3: Cropping Balloons from New Images
+
+After training, you can use your custom model to detect and crop balloons from new images.
+
+The `crop_balloons.py` script uses your trained model to find balloons and save a padded, square crop of each one. The cropping logic is designed to avoid adding black bars, even if the balloon is near the edge of the image.
+
+### Basic Usage
+To run the script on a single image, provide the path to the image. It will automatically use the default model trained in the previous step.
+
+```bash
+python crop_balloons.py path/to/your/image.jpg
+```
+
+### Advanced Usage (Command-Line Arguments)
+You can customize the behavior of the cropping script with the following options:
+
+-   `--model`: Specify the path to your trained model file.
+-   `--conf`: Set the confidence threshold for detection (a value between 0.0 and 1.0).
+-   `--padding`: Set the percentage of padding to add around the detected balloon.
+
+**Example:**
+This command runs detection on an image using a specific model, a confidence threshold of 25%, and 15% padding around the detected balloons.
+```bash
+python crop_balloons.py path/to/your/image.jpg --model runs/detect/train/weights/best.pt --conf 0.25 --padding 0.15
+```
+
+All cropped images will be saved in the `output_crops/` directory.
